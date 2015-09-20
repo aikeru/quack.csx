@@ -8,6 +8,9 @@ using System.Collections.Generic;
 
 //Copied from my own ancient repo code at
 // http://webfu.codeplex.com/SourceControl/latest#WebFormsUtilities/Json/JSONObject.cs
+
+// WARNING: This is an "unsafe", naive, quick-n'-dirty JSON serializer. Do not use it on content you do not trust.
+
     public class JSONObjectUndefined : JSONObjectBase {
         public JSONObjectUndefined() {
         }
