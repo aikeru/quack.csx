@@ -1,3 +1,5 @@
+#load "JSONObject.cs"
+
 using System.Reflection;
 using System.Linq;
 
@@ -20,6 +22,28 @@ public class CsxTest {
     public CsxTest() {
     }
 }
+public class QuackResult {
+  public bool Success { get; set; }
+  public string ErrorMessage { get; set; }
+}
+
+var results = new List<QuackResult>();
+
+
+public class Quack {
+  public static bool OutputJson { get; set; }
+  public static void Log(string output) {
+    if(!OutputJson) {
+      Console.WriteLine(output);
+    }
+  }
+}
+
+if(Env.ScriptArgs.Count() > 0) {
+  if(Env.ScriptArgs[0] == "/json") { Quack.OutputJson = true; }
+} else {
+  Quack.OutputJson = false;
+}
 
 var testsRun = 0;
 var testsSucceeded = 0;
@@ -34,34 +58,51 @@ Action<string, Action> it = (testTitle, testAction) => {
 };
 
 Action runTests = () => {
-    Console.WriteLine("Running tests ...");
+    Quack.Log("Running tests ...");
     foreach(var test in tests) {
         try {
 	    testsRun++;
 	    test.TestAction();
 	    Console.ForegroundColor = System.ConsoleColor.Green;
-	    Console.WriteLine(test.Title + " SUCCESS.");
+	    Quack.Log(test.Title + " SUCCESS.");
+      results.Add(new QuackResult {
+          Success = true,
+          ErrorMessage = ""
+        });
 	    testsSucceeded++;
 	} catch (Exception ex) {
 	    testsFailed++;
 	    Console.ForegroundColor = System.ConsoleColor.Red;
-	    Console.WriteLine(test.Title + " FAILED.");
-	    Console.WriteLine(ex.ToString());
+	    Quack.Log(test.Title + " FAILED.");
+	    Quack.Log(ex.ToString());
+      results.Add(new QuackResult {
+          Success = false,
+          ErrorMessage = ex.ToString()
+        });
 	}
     }
     Console.ForegroundColor = System.ConsoleColor.Gray;
-    Console.WriteLine("");
-    Console.WriteLine("Tests run: " + testsRun);
-    Console.WriteLine("Tests succeeded: " + testsSucceeded);
-    Console.WriteLine("Tests failed: " + testsFailed);
+    Quack.Log("");
+    Quack.Log("Tests run: " + testsRun);
+    Quack.Log("Tests succeeded: " + testsSucceeded);
+    Quack.Log("Tests failed: " + testsFailed);
     if(testsRun == testsSucceeded) {
         Console.ForegroundColor = System.ConsoleColor.Green;
-        Console.WriteLine("All tests succeeded.");
+        Quack.Log("All tests succeeded.");
 	Console.ForegroundColor = System.ConsoleColor.Gray;
     } else {
         Console.ForegroundColor = System.ConsoleColor.Red;
-	Console.WriteLine("Some test(s) failed.");
+	Quack.Log("Some test(s) failed.");
 	Console.ForegroundColor = System.ConsoleColor.Gray;
     }
-    Console.WriteLine("");
+    Quack.Log("");
+
+    if(Quack.OutputJson) {
+      Console.Write(new JSONObject(new {
+        testsRun = testsRun,
+        testsSucceeded = testsSucceeded,
+        testsFailed = testsFailed,
+        testData = results.Select((r) => new JSONObject(r)).ToArray()
+      }).Render());
+    }
 };
