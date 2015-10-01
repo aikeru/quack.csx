@@ -11,4 +11,19 @@ public class Assert {
     public static void IsNotNull(object obj) {
         if(obj == null) { throw new Exception("Expected non-null, but was null."); }
     }
+    public static void Throws(Action throwAction) {
+        try {
+            throwAction();
+        } catch {
+            return;
+        }
+        throw new Exception("Expected an exception to be thrown.");
+    }
+    public static void DoesNotThrow(Action nonThrowAction) {
+        try {
+            nonThrowAction();
+        } catch (Exception inner) {
+            throw new Exception("Expected no exception, but one was thrown.", inner);
+        }
+    }
 }
