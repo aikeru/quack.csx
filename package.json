@@ -1,0 +1,23 @@
+{
+  "name": "quack.csx",
+  "version": "0.1.0",
+  "description": "A series of scripts to help rapid iteration.",
+  "main": "gulpfile.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aikeru/quack.csx.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/aikeru/quack.csx/issues"
+  },
+  "homepage": "https://github.com/aikeru/quack.csx#readme",
+  "devDependencies": {
+    "gulp": "^3.9.0",
+    "gulp-shell": "^0.4.3"
+  }
+}
