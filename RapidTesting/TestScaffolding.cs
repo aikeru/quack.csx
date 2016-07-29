@@ -1,6 +1,7 @@
 
 #r "System.Web"
 #r "System.Web.Services"
+#r "System.Runtime.Serialization"
 
 using System.Reflection;
 using System.Linq;
@@ -8,26 +9,51 @@ using System.Diagnostics;
 using System.IO;
 
 //Create the WSDL-generated class
-var wsdlProgram = @"C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6 Tools\wsdl.exe";
-var wsdlUrl = Env.ScriptArgs[0];
+//var wsdlProgram = @"C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6 Tools\wsdl.exe";
+var svcUtilProgram = @"C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6 Tools\svcutil.exe"; //"%1" /out:output.cs
 
-Console.WriteLine("WSDL found?" + File.Exists(wsdlProgram));
-//var wsdlOutputBinary = "ServiceClient.dll";
+var svcUrl = Env.ScriptArgs[0];
+var rewrite = Env.ScriptArgs.Count() > 1 ? Env.ScriptArgs[1] : "";
 
-var wsdlOutputBinary = Env.ScriptArgs[0].Substring(Env.ScriptArgs[0].LastIndexOf("/") + 1,
+Console.WriteLine("SvcUtil found?" + File.Exists(svcUtilProgram));
+var outputBinary = "ServiceClient.dll";
+
+var svcUtilOutputBinary = Env.ScriptArgs[0].Substring(Env.ScriptArgs[0].LastIndexOf("/") + 1,
   Env.ScriptArgs[0].Length - Env.ScriptArgs[0].LastIndexOf(".svc") + 1) + ".dll";
-var wsdlOutputFile = Path.GetTempFileName();
+var svcUtilOutputFile = Path.GetTempFileName();
 
-var wsdlProcess = new Process();
-wsdlProcess.StartInfo = new ProcessStartInfo(wsdlProgram, wsdlUrl + " /o:" + wsdlOutputFile);
-wsdlProcess.Start();
-wsdlProcess.WaitForExit();
+var svcUtilProcess = new Process();
+Console.WriteLine("exe: " + svcUtilProgram + " " + svcUrl + " /out: " + svcUtilOutputFile);
 
-Console.WriteLine("Temporary output file?" + wsdlOutputFile + " exists?" + File.Exists(wsdlOutputFile));
+svcUtilOutputFile = svcUtilOutputFile + ".cs"; //it does this ....
+
+svcUtilProcess.StartInfo = new ProcessStartInfo(svcUtilProgram, svcUrl + " /out:" + svcUtilOutputFile);
+svcUtilProcess.Start();
+svcUtilProcess.WaitForExit();
+
+Console.WriteLine("Temporary output file?" + svcUtilOutputFile + " exists?" + File.Exists(svcUtilOutputFile));
 
 //TODO: probably not an issue with these small client files, but if it got too big, this would be an issue
-var entireSvcFile = File.ReadAllText(wsdlOutputFile);
-File.WriteAllText(wsdlOutputFile, "namespace ScaffoldedClient {" + entireSvcFile + "}");
+var entireSvcFileLines = File.ReadAllText(svcUtilOutputFile).Split(new [] {"\r\n"}, StringSplitOptions.RemoveEmptyEntries);
+StringBuilder sbFinalCs = new StringBuilder();
+var hasPassedAssembly = false;
+var clientNamespaces = new List<string>();
+var hasFoundClientNamespace = false;
+foreach(var line in entireSvcFileLines) {
+	if(line.Contains("namespace")) {
+		clientNamespaces.Add(line.Substring("namespace ".Length));
+	}
+	if(!hasPassedAssembly && line.Contains("assembly")) {
+		hasPassedAssembly = true;
+		sbFinalCs.AppendLine(line);
+		sbFinalCs.AppendLine("namespace ScaffoldedClient {");
+	} else {
+		sbFinalCs.AppendLine(line);
+	}
+}
+sbFinalCs.AppendLine("}");
+//File.WriteAllText(svcUtilOutputFile, "namespace ScaffoldedClient {" + entireSvcFile + "}");
+File.WriteAllText(svcUtilOutputFile, sbFinalCs.ToString());
 
 var cscProcess = new Process();
 
@@ -35,32 +61,37 @@ var cscProgram = @"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe";
 
 Console.WriteLine("csc found?" + File.Exists(cscProgram));
 
-var cscArguments = @"/t:library /r:System.Web.Services.dll /r:System.Xml.dll /out:" + wsdlOutputBinary + " " + wsdlOutputFile;
+var cscArguments = @"/t:library /r:System.Web.Services.dll /r:System.Xml.dll /out:" + outputBinary + " " + svcUtilOutputFile;
+Console.WriteLine("exe: " + cscProgram + " " + cscArguments);
 cscProcess.StartInfo = new ProcessStartInfo(cscProgram, cscArguments);
 cscProcess.Start();
 cscProcess.WaitForExit();
 
-Console.WriteLine("Does " + wsdlOutputBinary + " exist?" + File.Exists(wsdlOutputBinary));
-Console.WriteLine("Looking for " + Path.GetFullPath(wsdlOutputBinary));
+Console.WriteLine("Does " + outputBinary + " exist?" + File.Exists(outputBinary));
+Console.WriteLine("Looking for " + Path.GetFullPath(outputBinary));
 
 Assembly assembly;
 AssemblyName an;
-Type baseSoapType;
+Type baseType;
 
 try {
-an = AssemblyName.GetAssemblyName(wsdlOutputBinary);
+an = AssemblyName.GetAssemblyName(outputBinary);
 //assembly = Assembly.ReflectionOnlyLoadFrom(Path.GetFullPath(wsdlOutputBinary));
-assembly = Assembly.LoadFrom(Path.GetFullPath(wsdlOutputBinary));
-baseSoapType = typeof(System.Web.Services.Protocols.SoapHttpClientProtocol);
+assembly = Assembly.LoadFrom(Path.GetFullPath(outputBinary));
+baseType = typeof(System.Runtime.Serialization.IExtensibleDataObject);
 
 foreach(var t in assembly.GetTypes()) { Console.WriteLine(t.Name); };
 } catch(Exception ex) {
   Console.WriteLine("Exception loading types...");
 }
 
+//var types = assembly.GetTypes()
+//.Where(t => t != baseType && baseType.IsAssignableFrom(t));
 var types = assembly.GetTypes()
-.Where(t => t != baseSoapType && baseSoapType.IsAssignableFrom(t));
+	.Where(t => t.Name.EndsWith("Client"));
 
+var bareSvcUrl = svcUrl.Replace("?wsdl", "");
+	
 var scriptTemplate = @"
 #" + @"r ""System""
 #" + @"r ""System.Core""
@@ -72,27 +103,38 @@ var scriptTemplate = @"
 #" + @"r ""System.Data""
 #" + @"r ""System.Net.Http""
 #" + @"r ""System.Xml""
+#" + @"r ""System.Runtime.Serialization.dll""
+#" + @"r ""System.ServiceModel""
 
 #" + @"r ""{0}""
 
 #" + @"load ""Assert.cs""
 #" + @"load ""TestHelper.cs""
 
-var client = new {1};
+//Client namespaces
+{2}
+
+System.ServiceModel.WSHttpBinding binding = new System.ServiceModel.WSHttpBinding();
+var endpointAddress = new System.ServiceModel
+	.EndpointAddress(""{3}"");
+
+var client = new {1}(binding, endpointAddress);
 
 ";
 
 
 var scaffoldFileBuilder = new StringBuilder();
 
-Console.WriteLine("Enumerating types...");
+Console.WriteLine("Enumerating types..." + types.Count());
 
 foreach(var clientType in types) {
   var fileName = "Test" + clientType.Name + ".csx";
   Console.WriteLine("Processing " + clientType.Name + " as " + fileName);
   var references = String.Format(scriptTemplate,
-   wsdlOutputBinary,
-   clientType.FullName);
+   outputBinary,
+   clientType.FullName,
+   clientNamespaces.Select(cn => "using ScaffoldedClient." + cn + ";").Aggregate((tot, cur) => tot + "\r\n" + cur),
+   bareSvcUrl);
 
    Console.WriteLine("Appending references...");
 
@@ -136,7 +178,9 @@ foreach(var clientType in types) {
 scaffoldFileBuilder.Append("\r\nrunTests();");
 
   Console.WriteLine("Writing scaffolding to " + fileName);
-  File.WriteAllText(fileName, scaffoldFileBuilder.ToString());
+  if(File.Exists(fileName) && rewrite.StartsWith("r")) {
+	File.WriteAllText(fileName, scaffoldFileBuilder.ToString());
+  }
 }
 
 //

@@ -49,6 +49,7 @@ var testsRun = 0;
 var testsSucceeded = 0;
 var testsFailed = 0;
 var tests = new List<CsxTest>();
+CsxTest singleTest = null;
 
 Action<string, Action> it = (testTitle, testAction) => {
     tests.Add(new CsxTest {
@@ -57,30 +58,60 @@ Action<string, Action> it = (testTitle, testAction) => {
     });
 };
 
+Action<string, Action> itOnly = (testTitle, testAction) => {
+	singleTest = new CsxTest {
+		TestAction = testAction,
+		Title = testTitle
+	};
+};
+
 Action runTests = () => {
     Quack.Log("Running tests ...");
-    foreach(var test in tests) {
-        try {
-	    testsRun++;
-	    test.TestAction();
-	    Console.ForegroundColor = System.ConsoleColor.Green;
-	    Quack.Log(test.Title + " SUCCESS.");
-      results.Add(new QuackResult {
-          Success = true,
-          ErrorMessage = ""
-        });
-	    testsSucceeded++;
-	} catch (Exception ex) {
-	    testsFailed++;
-	    Console.ForegroundColor = System.ConsoleColor.Red;
-	    Quack.Log(test.Title + " FAILED.");
-	    Quack.Log(ex.ToString());
-      results.Add(new QuackResult {
-          Success = false,
-          ErrorMessage = ex.ToString()
-        });
+	if(singleTest != null) {
+		try {
+			testsRun++;
+			singleTest.TestAction();
+			Console.ForegroundColor = System.ConsoleColor.Green;
+			Quack.Log(singleTest.Title + " SUCCESS.");
+			results.Add(new QuackResult {
+			  Success = true,
+			  ErrorMessage = ""
+			});
+			testsSucceeded++;
+		} catch (Exception ex) {
+			testsFailed++;
+			Console.ForegroundColor = System.ConsoleColor.Red;
+			Quack.Log(singleTest.Title + " FAILED.");
+			Quack.Log(ex.ToString());
+			results.Add(new QuackResult {
+			  Success = false,
+			  ErrorMessage = ex.ToString()
+			});
+		}
+	} else {
+		foreach(var test in tests) {
+			try {
+			testsRun++;
+			test.TestAction();
+			Console.ForegroundColor = System.ConsoleColor.Green;
+			Quack.Log(test.Title + " SUCCESS.");
+		  results.Add(new QuackResult {
+			  Success = true,
+			  ErrorMessage = ""
+			});
+			testsSucceeded++;
+			} catch (Exception ex) {
+				testsFailed++;
+				Console.ForegroundColor = System.ConsoleColor.Red;
+				Quack.Log(test.Title + " FAILED.");
+				Quack.Log(ex.ToString());
+			  results.Add(new QuackResult {
+				  Success = false,
+				  ErrorMessage = ex.ToString()
+				});
+			}
+		}
 	}
-    }
     Console.ForegroundColor = System.ConsoleColor.Gray;
     Quack.Log("");
     Quack.Log("Tests run: " + testsRun);
@@ -92,8 +123,8 @@ Action runTests = () => {
 	Console.ForegroundColor = System.ConsoleColor.Gray;
     } else {
         Console.ForegroundColor = System.ConsoleColor.Red;
-	Quack.Log("Some test(s) failed.");
-	Console.ForegroundColor = System.ConsoleColor.Gray;
+		Quack.Log("Some test(s) failed.");
+		Console.ForegroundColor = System.ConsoleColor.Gray;
     }
     Quack.Log("");
 
